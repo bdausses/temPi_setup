@@ -24,6 +24,21 @@ end
 # Install telegraf
 package 'telegraf'
 
+service 'telegraf' do
+  supports :status => true
+  action [:enable, :start]
+end
+
+# Drop telegraf config
+template '/etc/telegraf/telegraf.conf' do
+  source 'telegraf.conf.erb'
+  owner 'root'
+  group 'root'
+  mode '0644'
+  action :create
+  notifies :restart, 'service[telegraf]'
+end
+
 # Create flags directory
 directory '/opt/apps/flags' do
   owner 'root'
