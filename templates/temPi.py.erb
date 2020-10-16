@@ -1,0 +1,86 @@
+#!/usr/bin/python
+
+import sys
+import os
+import Adafruit_DHT
+import math
+import numpy
+import threading
+from time import sleep
+from datetime import datetime
+
+sensor = Adafruit_DHT.AM2302
+pin = 4
+
+filtered_temperature = [] # here we keep the temperature values after removing outliers
+filtered_humidity = [] # here we keep the filtered humidity values after removing the outliers
+
+lock = threading.Lock() # we are using locks so we don't have conflicts while accessing the shared variables
+
+# function which eliminates the noise
+# by using a statistical model
+# we determine the standard normal deviation and we exclude anything that goes beyond a threshold
+# think of a probability distribution plot - we remove the extremes
+# the greater the std_factor, the more "forgiving" is the algorithm with the extreme values
+def eliminateNoise(values, std_factor = 2):
+    mean = numpy.mean(values)
+    standard_deviation = numpy.std(values)
+
+    if standard_deviation == 0:
+        return values
+
+    final_values = [element for element in values if element > mean - std_factor * standard_deviation]
+    final_values = [element for element in final_values if element < mean + std_factor * standard_deviation]
+
+    return final_values
+
+# function for processing the data
+# filtering, periods of time, yada yada
+def readingValues():
+    seconds_window = 2 # after this many second we make a record
+    values = []
+
+    counter = 0
+    while counter < seconds_window:
+        temp = None
+        humidity = None
+        try:
+            [humidity, temp] = Adafruit_DHT.read_retry(sensor, pin)
+
+        except IOError:
+            print("we've got IO error")
+
+        if math.isnan(temp) == False and math.isnan(humidity) == False:
+            values.append({"temp" : temp, "hum" : humidity})
+            counter += 1
+
+        sleep(1)
+
+    lock.acquire()
+    filtered_temperature.append(numpy.mean(eliminateNoise([x["temp"] for x in values])))
+    filtered_humidity.append(numpy.mean(eliminateNoise([x["hum"] for x in values])))
+    lock.release()
+
+    values = []
+
+def Main():
+    readingValues()
+
+    if len(filtered_temperature) > 0: # or we could have used filtered_humidity instead
+        lock.acquire()
+
+        temperature = filtered_temperature.pop()
+        temperature = temperature * 9/5.0 + 32
+        humidity = filtered_humidity.pop()
+        # Print the output
+        dataline = '{} Temp={:.01f} F and Humidity={:.01f} %' .format(datetime.now().timestamp(), temperature, humidity)
+        print(dataline)
+        # Save the output for historical data purposes
+        datafile = '/opt/apps/temPi/data/data.log'
+        fd = open(datafile,'a')
+        fd.write(dataline + "\n")
+        fd.close()
+
+        lock.release()
+
+Main()

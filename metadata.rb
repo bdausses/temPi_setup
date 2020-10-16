@@ -1,0 +1,7 @@
+name 'temPi_setup'
+maintainer 'Brad Dausses'
+maintainer_email 'brad.dausses@gmail.com'
+license 'Apache-2.0'
+description 'Installs/Configures temPi_setup'
+version '0.1.0'
+chef_version '>= 14.0'
